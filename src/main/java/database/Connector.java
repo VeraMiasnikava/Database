@@ -3,17 +3,18 @@ package database;
 import java.sql.*;
 import java.util.Properties;
 import java.util.Scanner;
+
 import lombok.extern.log4j.Log4j;
 
 @Log4j
-public class Connector {
+class Connector implements AutoCloseable {
 
     private Properties p = new Properties();
     private Connection connection;
     private Statement statement;
     private ResultSet result;
 
-    boolean testDriver() {
+    boolean registerDriver() {
         try {
             Class.forName("com.mysql.cj.jdbc.Driver").getDeclaredConstructor().newInstance();
             log.info("Драйвер для работы с бд успешно загружен");
@@ -29,12 +30,12 @@ public class Connector {
         String port;
         String databaseName;
         String username;
-        String password ;
+        String password;
         Scanner in = new Scanner(System.in);
         try {
             System.out.println("Введите логин");
             username = in.nextLine();
-           System.out.println("Введите пароль");
+            System.out.println("Введите пароль");
             password = in.nextLine();
             System.out.println("Введите порт");
             port = in.nextLine();
@@ -47,7 +48,6 @@ public class Connector {
             }
             // "jdbc:mysql://localhost:3306/college";
             String fullUrl = "jdbc:mysql://" + url + ":" + port + "/" + databaseName;
-            System.out.println("full url=" + fullUrl);
             p.setProperty("user", username);
             p.setProperty("password", password);
             p.setProperty("useUnicode", "true");
@@ -68,20 +68,45 @@ public class Connector {
         }
     }
 
-    void createQuery() {
+    void inputQuery() {
+        String query;
+        Scanner in = new Scanner(System.in);
+        System.out.println("Введите запрос, в конце должна стоять ;");
+        StringBuilder temp = new StringBuilder();
+        while (in.hasNext()) {
+            temp.append(in.nextLine());
+            if (temp.length() > 0 && temp.charAt(temp.length() - 1) == ';') break;
+        }
+        query = temp.toString();
+        if (query.length() > 6) {
+            String subquery = query.substring(0, 6);
+            if (subquery.equalsIgnoreCase("select")) {
+                this.createSelectQuery(query);
+            } else {
+                this.createUpdateQuery(query);
+            }
+        } else {
+            log.error("Ошибка синтаксиса в sql-запросе");
+        }
+    }
+
+    private void createSelectQuery(String query) {
         try {
             statement = connection.createStatement();
             //String query = "select id, name, surname from students";
-            String query;
-            Scanner in = new Scanner(System.in);
-            System.out.println("Введите запрос на выборку");
-            query = in.nextLine();
-            if (query.isEmpty()) {
-                throw new EmptyInputException("введен пустой запрос");
-            }
             result = statement.executeQuery(query);
-        } catch (EmptyInputException e) {
-            log.error(e.getMessage());
+            int columns = result.getMetaData().getColumnCount();
+            for (int i = 1; i <= columns; i++) {
+                System.out.print(result.getMetaData().getColumnLabel(i) + "\t|\t");
+            }
+            System.out.println();
+            System.out.println("-------------------------------------------");
+            while (result.next()) {
+                for (int i = 1; i <= columns; i++) {
+                    System.out.print(result.getString(i) + "\t|\t");
+                }
+                System.out.println();
+            }
         } catch (SQLSyntaxErrorException e) {
             log.error("Ошибка синтаксиса в sql-запросе:");
             log.error(e);
@@ -91,21 +116,12 @@ public class Connector {
         }
     }
 
-    void createUpdate() {
+    private void createUpdateQuery(String query) {
         try {
-           /* String query = "INSERT INTO college.students (id, name, surname)VALUES (7, 'Igor', 'Prinov');";*/
+            /* String query = "INSERT INTO college.students (id, name, surname)VALUES (9, 'Ira', 'Vatnay');";*/
             statement = connection.createStatement();
-            String query;
-            Scanner in = new Scanner(System.in);
-            System.out.println("Введите запрос на изменение");
-            query = in.nextLine();
-            if (query.isEmpty()) {
-                throw new EmptyInputException("введен пустой запрос");
-            }
-            statement.executeUpdate(query);
-        } catch (EmptyInputException e) {
-            log.error(e.getMessage());
-        }catch (SQLSyntaxErrorException e) {
+            System.out.println("Количество измененных строк=" + statement.executeUpdate(query));
+        } catch (SQLSyntaxErrorException e) {
             log.error("Ошибка синтаксиса в sql-запросе:");
             log.error(e);
         } catch (SQLException e) {
@@ -114,22 +130,21 @@ public class Connector {
         }
     }
 
-    void closeConnector() {
-        try {
-            if (result != null) {
-                result.close();
-            }
-            if (statement != null) {
-                statement.close();
-            }
-            if (connection != null) {
-                connection.close();
-            }
-        } catch (SQLException e) {
-            log.error("Ошибка при закрытии соединения:");
-            log.error(e);
+    @Override
+    public void close() throws Exception {
+
+        if (result != null) {
+            result.close();
+            System.out.println("result close");
+        }
+        if (statement != null) {
+            statement.close();
+            System.out.println("statement close");
+        }
+        if (connection != null) {
+            connection.close();
+            System.out.println("connection close");
         }
     }
-
 
 }
